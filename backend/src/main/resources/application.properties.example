@@ -1,0 +1,15 @@
+# NBA Stats API — copy to application.properties and set your values (do not commit application.properties)
+spring.application.name=nba-stats-api
+
+# PostgreSQL (override with env vars in production)
+spring.datasource.url=jdbc:postgresql://localhost:5432/nba_stats
+spring.datasource.username=postgres
+spring.datasource.password=
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.show-sql=false
+spring.jpa.open-in-view=false
+
+server.port=8080

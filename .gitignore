@@ -1,0 +1,35 @@
+# Environment and secrets (never commit)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Backend (Java / Maven)
+backend/target/
+backend/src/main/resources/application.properties
+backend/.idea/
+backend/*.iml
+backend/.settings/
+backend/.classpath
+backend/.project
+
+# Frontend (already in frontend/.gitignore but listed here for root)
+frontend/node_modules/
+frontend/dist/
+
+# Python / ingestion
+ingestion/.venv/
+ingestion/venv/
+ingestion/__pycache__/
+ingestion/**/__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+.vscode/
