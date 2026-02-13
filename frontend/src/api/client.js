@@ -1,5 +1,7 @@
 // In production with split hosting (e.g. Vercel + Railway), set VITE_API_URL to the backend URL (no trailing slash)
 const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api'
+// Debug: in browser Console you should see the API base (remove this line once everything works)
+if (typeof window !== 'undefined') console.log('[NBA Stats] API base:', API_BASE)
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
