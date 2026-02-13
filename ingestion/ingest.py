@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import logging
 import os
 import time
@@ -364,6 +365,17 @@ def _get(d, *keys, default=None):
     return default
 
 
+def _run_with_timeout(func, timeout_seconds: float, default=None):
+    """Run func() in a thread; return result or default on timeout (avoids hanging on nba_api)."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(func)
+        try:
+            return fut.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError:
+            logger.warning("Request timed out after %s s", timeout_seconds)
+            return default
+
+
 def fetch_game_log(nba_player_id: int, season: str, delay: float = REQUEST_DELAY, retry_on_short: bool = True) -> list[dict]:
     """Fetch game log for one player/season from nba_api. Returns list of row dicts.
     Uses the result set with the most rows that has GAME_ID (full game log); retries once if 0–1 row.
@@ -496,14 +508,18 @@ def main():
 
     with db_connection() as conn:
         for nba_id in to_ingest:
-            # Resolve name for display and for DB
+            # Resolve name for display and for DB (with timeout so one hung request doesn't stall the run)
             time.sleep(args.delay)
-            try:
-                info = commonplayerinfo.CommonPlayerInfo(player_id=nba_id)
-                info_df = info.get_data_frames()[0]
-            except Exception as e:
-                logger.warning("commonplayerinfo failed for nba_id=%s: %s", nba_id, e)
-                info_df = None
+
+            def _fetch_player_info():
+                try:
+                    info = commonplayerinfo.CommonPlayerInfo(player_id=nba_id)
+                    return info.get_data_frames()[0]
+                except Exception as e:
+                    logger.warning("commonplayerinfo failed for nba_id=%s: %s", nba_id, e)
+                    return None
+
+            info_df = _run_with_timeout(_fetch_player_info, timeout_seconds=60, default=None)
             if info_df is not None and not info_df.empty:
                 full_name = info_df["DISPLAY_FIRST_LAST"].iloc[0]
                 first_name = info_df["FIRST_NAME"].iloc[0]
@@ -516,7 +532,11 @@ def main():
             player_id = ensure_player(conn, nba_id, full_name, first_name, last_name)
             logger.info("Player id=%s nba_id=%s name=%s", player_id, nba_id, full_name)
 
-            rows = fetch_game_log(nba_id, args.season, args.delay)
+            rows = _run_with_timeout(
+                lambda: fetch_game_log(nba_id, args.season, args.delay),
+                timeout_seconds=90,
+                default=[],
+            )
             if rows:
                 n = upsert_game_logs(conn, player_id, rows)
                 logger.info("Upserted %s game log rows for player_id=%s season=%s", n, player_id, args.season)
@@ -524,6 +544,10 @@ def main():
                 upsert_player_season_stats(conn, player_id, season_used, rows)
             else:
                 logger.warning("No game log rows for player_id=%s season=%s", player_id, args.season)
+
+            # Commit after each player so we don't sit "idle in transaction" for the whole run.
+            # Avoids Railway/free-tier closing long-lived idle transactions.
+            conn.commit()
 
     logger.info("Ingestion done.")
 
