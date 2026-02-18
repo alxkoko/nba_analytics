@@ -6,22 +6,40 @@ import SeasonStats from '../components/SeasonStats'
 import OverUnderBlock from '../components/OverUnderBlock'
 import PointsChart from '../components/PointsChart'
 
+const HEADSHOT_URL = (nbaId) => `https://cdn.nba.com/headshots/nba/latest/260x190/${nbaId}.png`
+
+function PlayerHeadshot({ nbaPlayerId }) {
+  const [show, setShow] = useState(true)
+  if (!nbaPlayerId || !show) return null
+  return (
+    <img
+      src={HEADSHOT_URL(nbaPlayerId)}
+      alt=""
+      width={130}
+      height={95}
+      style={{ objectFit: 'cover', borderRadius: 8, background: '#eee' }}
+      onError={() => setShow(false)}
+    />
+  )
+}
+
 export default function PlayerDetail() {
   const { id } = useParams()
   const [player, setPlayer] = useState(null)
   const [games, setGames] = useState([])
   const [stats, setStats] = useState(null)
   const [overUnder, setOverUnder] = useState(null)
-  const [season, setSeason] = useState(() => getCurrentSeason())
-  const [seasonOptions, setSeasonOptions] = useState([])
+  const season = getCurrentSeason()
   const [overUnderStat, setOverUnderStat] = useState('pts')
   const [overUnderThreshold, setOverUnderThreshold] = useState(25)
   const [lastN, setLastN] = useState(10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
-    api.getSeasons(5).then(setSeasonOptions).catch(() => setSeasonOptions([getCurrentSeason(), '2023-24', '2022-23']))
+    document.title = 'NBA Player Analytics'
+    return () => { document.title = 'NBA Player Analytics' }
   }, [])
 
   useEffect(() => {
@@ -41,10 +59,11 @@ export default function PlayerDetail() {
         setGames(g || [])
         setStats(s)
         setOverUnder(ou)
+        if (p?.fullName) document.title = `${p.fullName} – NBA Player Analytics`
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [id, season, overUnderStat, overUnderThreshold, lastN])
+  }, [id, season, overUnderStat, overUnderThreshold, lastN, retry])
 
   if (loading && !player) {
     return <p>Loading…</p>
@@ -52,7 +71,17 @@ export default function PlayerDetail() {
   if (error && !player) {
     return (
       <div>
-        <p style={{ color: '#c41e3a' }}>{error}</p>
+        <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#fff2f2', border: '1px solid #f5c6cb', borderRadius: 8 }}>
+          <p style={{ color: '#c41e3a', margin: '0 0 0.5rem 0' }}>Something went wrong.</p>
+          <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>We couldn’t load this player. Check your connection and try again.</p>
+          <button
+            type="button"
+            onClick={() => { setError(null); setLoading(true); setRetry((r) => r + 1); }}
+            style={{ marginTop: '0.75rem', padding: '0.4rem 0.75rem', background: '#c41e3a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 500 }}
+          >
+            Try again
+          </button>
+        </div>
         <Link to="/">← Back to search</Link>
       </div>
     )
@@ -71,25 +100,13 @@ export default function PlayerDetail() {
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">← Back to search</Link>
       </p>
-      <h1 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.75rem' }}>{player.fullName}</h1>
-      <p style={{ color: '#666', marginBottom: '1.5rem' }}>NBA ID: {player.nbaPlayerId}</p>
-
-      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Season</label>
-      <select
-        value={season}
-        onChange={(e) => setSeason(e.target.value)}
-        style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid #ccc', marginBottom: '1.5rem' }}
-      >
-        {seasonOptions.length ? seasonOptions.map((s) => (
-          <option key={s} value={s}>{s}{s === getCurrentSeason() ? ' (current)' : ''}</option>
-        )) : (
-          <>
-            <option value={getCurrentSeason()}>{getCurrentSeason()} (current)</option>
-            <option value="2023-24">2023-24</option>
-            <option value="2022-23">2022-23</option>
-          </>
-        )}
-      </select>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <PlayerHeadshot nbaPlayerId={player.nbaPlayerId} />
+        <div>
+          <h1 style={{ marginTop: 0, marginBottom: '0.25rem', fontSize: '1.75rem' }}>{player.fullName}</h1>
+          <p style={{ color: '#666', margin: 0 }}>NBA ID: {player.nbaPlayerId} · Season: {season}</p>
+        </div>
+      </div>
 
       <SeasonStats stats={stats} />
       <OverUnderBlock
