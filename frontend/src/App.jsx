@@ -1,6 +1,7 @@
 import { Routes, Route, Link } from 'react-router-dom'
 import Home from './pages/Home'
 import PlayerDetail from './pages/PlayerDetail'
+import AddDailyLines from './pages/AddDailyLines'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -11,6 +12,8 @@ function App() {
         color: '#fff',
         padding: '0.75rem 1.5rem',
         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        display: 'flex',
+        alignItems: 'center',
       }}>
         <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: '1.25rem' }}>
           NBA Player Analytics
@@ -20,6 +23,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/players/:id" element={<PlayerDetail />} />
+          <Route path="/add-lines" element={<AddDailyLines />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

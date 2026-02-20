@@ -2,10 +2,28 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 
-const SUGGEST_DEBOUNCE_MS = 300
+const SUGGEST_DEBOUNCE_MS = 200
 const MIN_QUERY_LENGTH = 2
 
 const DOC_TITLE = 'NBA Player Analytics'
+
+// Same CDN as PlayerDetail; images load from NBA, not your hosting
+const HEADSHOT_URL = (nbaId) => `https://cdn.nba.com/headshots/nba/latest/260x190/${nbaId}.png`
+
+function PlayerAvatar({ nbaPlayerId, size = 36 }) {
+  const [show, setShow] = useState(true)
+  if (!nbaPlayerId || !show) return <span style={{ width: size, height: size, flexShrink: 0 }} />
+  return (
+    <img
+      src={HEADSHOT_URL(nbaPlayerId)}
+      alt=""
+      width={size}
+      height={size}
+      style={{ objectFit: 'cover', borderRadius: 6, background: '#eee', flexShrink: 0 }}
+      onError={() => setShow(false)}
+    />
+  )
+}
 
 export default function Home() {
   const [query, setQuery] = useState('')
@@ -17,10 +35,15 @@ export default function Home() {
   const [error, setError] = useState(null)
   const navigate = useNavigate()
   const suggestRef = useRef(null)
+  const [todayPicks, setTodayPicks] = useState([])
 
   useEffect(() => {
     document.title = DOC_TITLE
     return () => { document.title = DOC_TITLE }
+  }, [])
+
+  useEffect(() => {
+    api.getTodayPicks().then(setTodayPicks).catch(() => setTodayPicks([]))
   }, [])
 
   // Debounced search-as-you-type for suggestions
@@ -133,6 +156,9 @@ export default function Home() {
                     style={{
                       width: '100%',
                       padding: '0.6rem 0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
                       textAlign: 'left',
                       border: 'none',
                       background: 'none',
@@ -143,6 +169,7 @@ export default function Home() {
                     onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f0f0' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
                   >
+                    <PlayerAvatar nbaPlayerId={p.nbaPlayerId} size={32} />
                     {p.fullName}
                   </button>
                 </li>
@@ -165,6 +192,41 @@ export default function Home() {
           {loading ? 'Searching…' : 'Search'}
         </button>
       </form>
+
+      {todayPicks.length > 0 && (
+        <section style={{ marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '0.75rem' }}>Today&apos;s picks</h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {todayPicks.map((pick, idx) => (
+              <li key={pick.id} style={{ marginBottom: '0.5rem' }}>
+                <Link
+                  to={`/players/${pick.playerId}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.6rem 0.75rem',
+                    background: '#fff',
+                    borderRadius: 8,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                    color: '#1a1a1a',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span style={{ width: 24, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: pick.suggestion === 'Over' ? '#0a0' : '#c41e3a', color: '#fff', fontSize: 14 }}>
+                    {pick.suggestion === 'Over' ? '✓' : '✕'}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>
+                    {idx + 1}. {pick.playerName} {pick.suggestion} {pick.line} {pick.statLabel}
+                  </span>
+                  <span style={{ color: '#666', fontSize: '0.9rem' }}>({pick.reason})</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {error && (
         <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#fff2f2', border: '1px solid #f5c6cb', borderRadius: 8 }}>
           <p style={{ color: '#c41e3a', margin: '0 0 0.5rem 0' }}>Something went wrong.</p>
@@ -185,7 +247,9 @@ export default function Home() {
               <Link
                 to={`/players/${p.id}`}
                 style={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
                   padding: '0.75rem 1rem',
                   background: '#fff',
                   borderRadius: 8,
@@ -194,6 +258,7 @@ export default function Home() {
                   fontWeight: 500,
                 }}
               >
+                <PlayerAvatar nbaPlayerId={p.nbaPlayerId} size={40} />
                 {p.fullName}
               </Link>
             </li>

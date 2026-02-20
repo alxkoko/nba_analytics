@@ -50,4 +50,18 @@ export const api = {
     if (lastN != null && lastN > 0) path += `&lastN=${lastN}`
     return request(path)
   },
+  getPropPicks(playerId, { season = '2024-25', ptsRebAst, ptsAst, rebAst } = {}) {
+    const params = new URLSearchParams({ season })
+    if (ptsRebAst != null && ptsRebAst !== '') params.set('ptsRebAst', ptsRebAst)
+    if (ptsAst != null && ptsAst !== '') params.set('ptsAst', ptsAst)
+    if (rebAst != null && rebAst !== '') params.set('rebAst', rebAst)
+    return request(`/players/${playerId}/prop-picks?${params}`)
+  },
+  getTodayPicks(date = null) {
+    const params = date ? `?date=${date}` : ''
+    return request(`/today-picks${params}`)
+  },
+  addDailyLines(body) {
+    return request('/admin/daily-lines', { method: 'POST', body: JSON.stringify(body) })
+  },
 }
