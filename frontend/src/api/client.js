@@ -57,9 +57,12 @@ export const api = {
     if (rebAst != null && rebAst !== '') params.set('rebAst', rebAst)
     return request(`/players/${playerId}/prop-picks?${params}`)
   },
-  getTodayPicks(date = null) {
-    const params = date ? `?date=${date}` : ''
-    return request(`/today-picks${params}`)
+  getTodayPicks(date = null, limit = null) {
+    const params = new URLSearchParams()
+    if (date) params.set('date', date)
+    if (limit !== null && limit !== undefined) params.set('limit', String(limit))
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    return request(`/today-picks${qs}`)
   },
   addDailyLines(body) {
     return request('/admin/daily-lines', { method: 'POST', body: JSON.stringify(body) })

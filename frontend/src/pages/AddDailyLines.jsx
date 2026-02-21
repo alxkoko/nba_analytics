@@ -50,6 +50,7 @@ export default function AddDailyLines() {
     <div>
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">← Back to search</Link>
+        <span style={{ marginLeft: '1rem' }}><Link to="/view-picks">View all picks (sorted)</Link></span>
       </p>
       <h1 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.5rem' }}>Add today&apos;s lines</h1>
       <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem' }}>

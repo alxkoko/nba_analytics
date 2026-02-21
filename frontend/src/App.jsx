@@ -2,6 +2,7 @@ import { Routes, Route, Link } from 'react-router-dom'
 import Home from './pages/Home'
 import PlayerDetail from './pages/PlayerDetail'
 import AddDailyLines from './pages/AddDailyLines'
+import ViewTodayPicks from './pages/ViewTodayPicks'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
           <Route path="/players/:id" element={<PlayerDetail />} />
           <Route path="/add-lines" element={<AddDailyLines />} />
           <Route path="/daily-lines" element={<AddDailyLines />} />
+          <Route path="/view-picks" element={<ViewTodayPicks />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

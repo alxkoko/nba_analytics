@@ -23,11 +23,12 @@ public class TodayPicksController {
 
     @GetMapping("/today-picks")
     public List<TodayPickDto> getTodayPicks(
-        @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+        @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(value = "limit", required = false) Integer limit
     ) {
         LocalDate useDate = date != null ? date : dailyPropLineService.getLatestLineDate().orElse(null);
         if (useDate == null) return List.of();
-        return dailyPropLineService.getTodayPicks(useDate);
+        return dailyPropLineService.getTodayPicks(useDate, limit);
     }
 
     @PostMapping("/admin/daily-lines")

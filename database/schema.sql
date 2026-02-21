@@ -75,6 +75,21 @@ CREATE TABLE IF NOT EXISTS player_season_stats (
 
 CREATE INDEX IF NOT EXISTS idx_pss_player ON player_season_stats (player_id);
 
+-- Daily prop lines: you provide ~30 lines per day; we compute Over/Under suggestion and show best on homepage
+CREATE TABLE IF NOT EXISTS daily_prop_lines (
+    id              BIGSERIAL PRIMARY KEY,
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    stat_key        VARCHAR(32) NOT NULL,   -- pts, reb, ast, fg3m, pts_reb, pts_ast, reb_ast, pts_reb_ast
+    line_value      NUMERIC(6,2) NOT NULL,
+    line_date       DATE NOT NULL,
+    suggestion      VARCHAR(8) NOT NULL,    -- Over, Under
+    confidence      VARCHAR(16) NOT NULL,   -- High, Medium, Low
+    reason          VARCHAR(512),          -- e.g. "4/5 last 5, trend Up, consistent"
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dpl_line_date ON daily_prop_lines (line_date);
+
 -- Trigger to keep updated_at current (optional)
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

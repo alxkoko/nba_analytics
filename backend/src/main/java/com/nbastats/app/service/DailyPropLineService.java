@@ -91,7 +91,8 @@ public class DailyPropLineService {
         return startYear + "-" + (endYY < 10 ? "0" : "") + endYY;
     }
 
-    public List<TodayPickDto> getTodayPicks(LocalDate date) {
+    /** Get picks for a date, sorted by confidence (High first). limit null = 3 (homepage), 0 or negative = all. */
+    public List<TodayPickDto> getTodayPicks(LocalDate date, Integer limit) {
         List<DailyPropLine> list = dailyPropLineRepository.findByLineDateWithPlayer(date);
         List<TodayPickDto> out = new ArrayList<>();
         if (list.isEmpty()) return out;
@@ -123,7 +124,8 @@ public class DailyPropLineService {
             ));
         }
         out.sort(Comparator.comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed());
-        return out.size() <= TOP_PICKS_LIMIT ? out : out.subList(0, TOP_PICKS_LIMIT);
+        int cap = limit == null ? TOP_PICKS_LIMIT : (limit <= 0 ? out.size() : Math.min(limit, out.size()));
+        return out.size() <= cap ? out : out.subList(0, cap);
     }
 
     /** Request body for one line when adding daily lines. */

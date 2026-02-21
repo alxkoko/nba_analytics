@@ -14,15 +14,44 @@ import argparse
 import concurrent.futures
 import logging
 import os
+import sys
 import time
+import unicodedata
 from contextlib import contextmanager
 from datetime import date
 
-import psycopg2
-from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Ensure we run inside the project venv so you don't have to remember to activate
+def _ensure_venv():
+    if getattr(sys, "prefix", None) != getattr(sys, "base_prefix", None):
+        return  # already in a venv
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == "win32":
+        venv_python = os.path.join(script_dir, ".venv", "Scripts", "python.exe")
+    else:
+        venv_python = os.path.join(script_dir, ".venv", "bin", "python")
+    if os.path.isfile(venv_python):
+        os.execv(venv_python, [venv_python] + sys.argv)
+    print("No venv active. Create and use it first:")
+    print("  python -m venv .venv")
+    print("  .venv\\Scripts\\activate   (Windows)  or  source .venv/bin/activate   (Mac/Linux)")
+    print("Then run this script again.")
+    sys.exit(1)
+
+
+_ensure_venv()
+
+try:
+    import psycopg2
+    from psycopg2.extras import execute_values
+except ImportError:
+    print("Missing dependency. From the ingestion folder, run:")
+    print("  .venv\\Scripts\\pip install -r requirements.txt   (Windows)")
+    print("  or:  .venv/bin/pip install -r requirements.txt   (Mac/Linux)")
+    raise SystemExit(1)
 
 try:
     from nba_api.stats.endpoints import commonplayerinfo, playergamelog
@@ -80,7 +109,7 @@ DEFAULT_PLAYER_NAMES = [
     "Amen Thompson",
     "OG Anunoby",
     "Jaren Jackson Jr.",
-    "Norm Powell",
+    "Norman Powell",
     "LaMelo Ball",
     "Domantas Sabonis",
     "Michael Porter Jr.",
@@ -131,12 +160,113 @@ DEFAULT_PLAYER_NAMES = [
     "Devin Vassell",
     "Isaiah Stewart",
     "Toumani Camara",
-    "Cam Johnson",
+    "Cameron Johnson",
     "Immanuel Quickley",
     "Shaedon Sharpe",
     "Ajay Mitchell",
     "Kon Knueppel",
     "VJ Edgecombe",
+    # Additional players (Luka Doncic / Nikola Jokic already above; use ASCII for search)
+    "Grant Williams",
+    "Norman Powell",
+    "Anfernee Simons",
+    "Ryan Kalkbrenner",
+    "Josh Green",
+    "GG Jackson",
+    "Jaylen Wells",
+    "Cam Spencer",
+    "Kyle Anderson",
+    "Ace Bailey",
+    "Isaiah Collier",
+    "Kyle Filipowski",
+    "Cody Williams",
+    "Tre Johnson",
+    "Bilal Coulibaly",
+    "Tristan Vukcevic",
+    "Bub Carrington",
+    "Jarace Walker",
+    "Jay Huff",
+    "Kobe Brown",
+    "Ben Sheppard",
+    "CJ McCollum",
+    "Zaccharie Risacher",
+    "Andrew Wiggins",
+    "Pelle Larsson",
+    "P.J. Washington",
+    "Ayo Dosunmu",
+    "Donte DiVincenzo",
+    "Naji Marshall",
+    "Daniel Gafford",
+    "Saddiq Bey",
+    "Jeremiah Fears",
+    "Derik Queen",
+    "Herbert Jones",
+    "Ryan Rollins",
+    "Kevin Porter Jr.",
+    "Bobby Portis",
+    "AJ Green",
+    "Isaiah Joe",
+    "Aaron Wiggins",
+    "Jared McCain",
+    "Noah Clowney",
+    "Nolan Traore",
+    "Egor Demin",
+    "Nic Claxton",
+    "Day'Ron Sharpe",
+    "Jaylin Williams",
+    "Rui Hachimura",
+    "John Collins",
+    "Derrick Jones Jr.",
+    "Brook Lopez",
+    "Kris Dunn",
+    "Jerami Grant",
+    "Donovan Clingan",
+    "Scoot Henderson",
+    "Christian Braun",
+    "Vit Krejci",
+    "Robert Williams III",
+    "Tim Hardaway Jr.",
+    "Julian Strawther",
+    "Bruce Brown",
+    "Jonas Valanciunas",
+    "Grayson Allen",
+    "Collin Gillespie",
+    "Mark Williams",
+    "Royce O'Neale",
+    "Oso Ighodaro",
+    "Wendell Carter Jr.",
+    "Kelly Oubre Jr.",
+    "Quentin Grimes",
+    "Dominick Barlow",
+    "Andre Drummond",
+    "Trendon Watford",
+    "Adem Bona",
+    "Matas Buzelis",
+    "Jalen Smith",
+    "Isaac Okoro",
+    "Tre Jones",
+    "Patrick Williams",
+    "Tobias Harris",
+    "Duncan Robinson",
+    "Caris LeVert",
+    "Davion Mitchell",
+    "Ty Jerome",
+    "GG Jackson II",
+    "Cedric Coward",
+    "Keldon Johnson",
+    "Dylan Harper",
+    "Harrison Barnes",
+    "Julian Champagnie",
+    "Keegan Murray",
+    "Russell Westbrook",
+    "Maxime Raynaud",
+    "Precious Achiuwa",
+    "Landry Shamet",
+    "Jose Alvarado",
+    "Mitchell Robinson",
+    "Jabari Smith Jr.",
+    "Dorian Finney-Smith",
+    "Clint Capela",
 ]
 # Names not in nba_api (e.g. future draft) will be skipped with a warning.
 
@@ -376,13 +506,21 @@ def _run_with_timeout(func, timeout_seconds: float, default=None):
             return default
 
 
+# Longer HTTP read timeout (nba_api default is 30s; stats.nba.com often needs more)
+NBA_API_TIMEOUT = 90
+
 def fetch_game_log(nba_player_id: int, season: str, delay: float = REQUEST_DELAY, retry_on_short: bool = True) -> list[dict]:
     """Fetch game log for one player/season from nba_api. Returns list of row dicts.
     Uses the result set with the most rows that has GAME_ID (full game log); retries once if 0–1 row.
     """
     time.sleep(delay)
     try:
-        log = playergamelog.PlayerGameLog(player_id=nba_player_id, season=season, season_type_all_star="Regular Season")
+        log = playergamelog.PlayerGameLog(
+            player_id=nba_player_id,
+            season=season,
+            season_type_all_star="Regular Season",
+            timeout=NBA_API_TIMEOUT,
+        )
         # get_dict() returns {"resultSets": [{"name": "...", "headers": [...], "rowSet": [[...], ...]}, ...]}
         # Pick the result set that looks like the game log (has GAME_ID and most rows)
         raw = log.get_dict()
@@ -408,7 +546,12 @@ def fetch_game_log(nba_player_id: int, season: str, delay: float = REQUEST_DELAY
     if not best_headers or not best_rows:
         # Fallback: try get_data_frames()[0] as before
         try:
-            log2 = playergamelog.PlayerGameLog(player_id=nba_player_id, season=season, season_type_all_star="Regular Season")
+            log2 = playergamelog.PlayerGameLog(
+                player_id=nba_player_id,
+                season=season,
+                season_type_all_star="Regular Season",
+                timeout=NBA_API_TIMEOUT,
+            )
             df = log2.get_data_frames()[0]
         except Exception:
             df = None
@@ -450,13 +593,21 @@ def fetch_game_log(nba_player_id: int, season: str, delay: float = REQUEST_DELAY
     return rows
 
 
+def _normalize_for_search(text: str) -> str:
+    """Lowercase and strip diacritics (e.g. Dončić -> doncic) so 'Luka Doncic' matches 'Luka Dončić'."""
+    if not text:
+        return ""
+    nfd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+
+
 def search_players(name_query: str) -> list[tuple[int, str]]:
-    """Return list of (nba_player_id, full_name) matching name (case-insensitive substring)."""
+    """Return list of (nba_player_id, full_name) matching name (case-insensitive, diacritic-insensitive substring)."""
     all_players = nba_players_static.get_players()
-    q = (name_query or "").strip().lower()
+    q = _normalize_for_search((name_query or "").strip())
     if not q:
         return []
-    return [(p["id"], p["full_name"]) for p in all_players if q in p["full_name"].lower()]
+    return [(p["id"], p["full_name"]) for p in all_players if q in _normalize_for_search(p["full_name"])]
 
 
 def main():
@@ -513,13 +664,21 @@ def main():
 
             def _fetch_player_info():
                 try:
-                    info = commonplayerinfo.CommonPlayerInfo(player_id=nba_id)
+                    info = commonplayerinfo.CommonPlayerInfo(player_id=nba_id, timeout=NBA_API_TIMEOUT)
                     return info.get_data_frames()[0]
                 except Exception as e:
                     logger.warning("commonplayerinfo failed for nba_id=%s: %s", nba_id, e)
                     return None
 
-            info_df = _run_with_timeout(_fetch_player_info, timeout_seconds=60, default=None)
+            info_df = None
+            for attempt in range(3):
+                info_df = _run_with_timeout(_fetch_player_info, timeout_seconds=120, default=None)
+                if info_df is not None and not info_df.empty:
+                    break
+                if attempt < 2:
+                    wait = 5
+                    logger.info("Retrying player info for nba_id=%s in %ss (attempt %s/3)...", nba_id, wait, attempt + 2)
+                    time.sleep(wait)
             if info_df is not None and not info_df.empty:
                 full_name = info_df["DISPLAY_FIRST_LAST"].iloc[0]
                 first_name = info_df["FIRST_NAME"].iloc[0]
@@ -532,11 +691,20 @@ def main():
             player_id = ensure_player(conn, nba_id, full_name, first_name, last_name)
             logger.info("Player id=%s nba_id=%s name=%s", player_id, nba_id, full_name)
 
-            rows = _run_with_timeout(
-                lambda: fetch_game_log(nba_id, args.season, args.delay),
-                timeout_seconds=90,
-                default=[],
-            )
+            # Fetch game log with retries (stats.nba.com often times out or is slow)
+            rows = []
+            for attempt in range(3):
+                rows = _run_with_timeout(
+                    lambda: fetch_game_log(nba_id, args.season, args.delay if attempt == 0 else 0),
+                    timeout_seconds=120,
+                    default=[],
+                )
+                if rows:
+                    break
+                if attempt < 2:
+                    wait = 10
+                    logger.info("No game log yet for nba_id=%s; retrying in %ss (attempt %s/3)...", nba_id, wait, attempt + 2)
+                    time.sleep(wait)
             if rows:
                 n = upsert_game_logs(conn, player_id, rows)
                 logger.info("Upserted %s game log rows for player_id=%s season=%s", n, player_id, args.season)
