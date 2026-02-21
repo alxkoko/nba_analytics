@@ -81,6 +81,20 @@ public class DailyPropLineService {
         };
     }
 
+    /** For sort: Over = hit rate (higher better); Under = 10 - hit rate (more unders = better). -1 when missing so those sort last. */
+    private static int normalizedHitRate(TodayPickDto t) {
+        int h = t.hitRateLast10();
+        if (h < 0) return -1;
+        return "Under".equalsIgnoreCase(t.suggestion()) ? (10 - h) : h;
+    }
+
+    /** For sort: Over = over_last_5 (higher better); Under = 5 - over_last_5 (more unders = better). -1 when missing so those sort last. */
+    private static int normalizedOver5(TodayPickDto t) {
+        int o = t.overLast5();
+        if (o < 0) return -1;
+        return "Under".equalsIgnoreCase(t.suggestion()) ? (5 - o) : o;
+    }
+
     /** Latest line_date in the DB (most recent day with any picks). */
     public Optional<LocalDate> getLatestLineDate() {
         return dailyPropLineRepository.findMaxLineDate();
@@ -131,14 +145,13 @@ public class DailyPropLineService {
                 over5
             ));
         }
-        // Sort by confidence (High first), then hit rate strength (higher = better), then id for stable order.
-        // Same logic as: ORDER BY confidence, hit_rate_last_10 DESC, over_last_5 DESC, id
+        // Sort by confidence (High first), then suggestion-aware strength: Over = higher hit rate, Under = more unders (10-h, 5-o).
         out.sort(Comparator
             .comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed()
-            .thenComparingInt(TodayPickDto::hitRateLast10).reversed()
-            .thenComparingInt(TodayPickDto::overLast5).reversed()
+            .thenComparing(Comparator.comparingInt((TodayPickDto t) -> normalizedHitRate(t)).reversed())
+            .thenComparing(Comparator.comparingInt((TodayPickDto t) -> normalizedOver5(t)).reversed())
             .thenComparingLong(TodayPickDto::id));
-
+            
         if (limit != null) {
             int cap = limit <= 0 ? out.size() : Math.min(limit, out.size());
             return out.size() <= cap ? out : out.subList(0, cap);
