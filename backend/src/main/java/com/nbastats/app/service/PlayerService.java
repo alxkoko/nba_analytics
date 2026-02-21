@@ -106,10 +106,10 @@ public class PlayerService {
     public List<PropPickSuggestionDto> getPropPickSuggestions(Long playerId, String season,
                                                               Double ptsRebAstLine, Double ptsAstLine, Double rebAstLine) {
         List<PlayerGameLog> logs = gameLogRepository.findByPlayer_IdAndSeasonOrderByGameDateDesc(playerId, season);
-        logs = logs.stream().limit(10).toList();
-        if (logs.size() < 5) {
+        if (logs.size() < 10) {
             return List.of();
         }
+        logs = logs.stream().limit(10).toList();
         List<PropPickSuggestionDto> out = new ArrayList<>();
         if (ptsRebAstLine != null) {
             out.add(buildPropSuggestion(logs, "pts_reb_ast", "Pts+Reb+Ast", ptsRebAstLine));
@@ -128,10 +128,10 @@ public class PlayerService {
         String safeStat = ALLOWED_STATS.contains(statKey) ? statKey : "pts";
         String label = STAT_LABELS.getOrDefault(safeStat, safeStat);
         List<PlayerGameLog> logs = gameLogRepository.findByPlayer_IdAndSeasonOrderByGameDateDesc(playerId, season);
-        logs = logs.stream().limit(10).toList();
-        if (logs.size() < 5) {
+        if (logs.size() < 10) {
             return null;
         }
+        logs = logs.stream().limit(10).toList();
         return buildPropSuggestion(logs, safeStat, label, lineValue);
     }
 
@@ -153,7 +153,6 @@ public class PlayerService {
         double last5Avg = values.stream().limit(5).mapToDouble(Double::doubleValue).average().orElse(0);
         long hit10 = values.stream().filter(v -> v >= line).count();
         long over5 = values.stream().limit(5).filter(v -> v >= line).count();
-        String trend = last5Avg >= last10Avg ? "Up" : "Down";
         double stdDev = stdDev(values);
         boolean highVariance = n > 1 && stdDev > 0.3 * last10Avg;
         double maxLast5 = values.stream().limit(5).mapToDouble(Double::doubleValue).max().orElse(0);
@@ -179,7 +178,7 @@ public class PlayerService {
             confidence = "Low";
         }
         return new PropPickSuggestionDto(propLabel, statKey, line, suggestion, confidence,
-            Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, trend,
+            Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
             (int) hit10, (int) over5, varianceNote);
     }
 

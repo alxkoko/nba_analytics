@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -59,7 +60,7 @@ public class DailyPropLineService {
             entity.setLineDate(date);
             entity.setSuggestion(dto.suggestion());
             entity.setConfidence(dto.confidence());
-            entity.setReason(String.format("%d/5 last 5, %d/10 last 10, trend %s. %s", dto.overLast5(), dto.hitRateLast10(), dto.trend(), dto.varianceNote()));
+            entity.setReason(String.format("%d/5 last 5, %d/10 last 10. %s", dto.overLast5(), dto.hitRateLast10(), dto.varianceNote()));
             entity.setHitRateLast10(dto.hitRateLast10());
             entity.setOverLast5(dto.overLast5());
             dailyPropLineRepository.save(entity);
@@ -117,6 +118,7 @@ public class DailyPropLineService {
 
         List<Long> playerIds = list.stream().map(d -> d.getPlayer().getId()).distinct().toList();
         String season = seasonForDate(date);
+        Set<Long> eligiblePlayerIds = new HashSet<>(playerGameLogRepository.findPlayerIdsWithAtLeast10GamesBefore(playerIds, season, date));
         List<Object[]> teamRows = playerIds.isEmpty() ? List.of() : playerGameLogRepository.findLatestTeamAbbrByPlayerIdsAndSeason(playerIds, season);
         Map<Long, String> playerToTeam = new LinkedHashMap<>();
         for (Object[] row : teamRows) {
@@ -126,6 +128,7 @@ public class DailyPropLineService {
         }
 
         for (DailyPropLine d : list) {
+            if (!eligiblePlayerIds.contains(d.getPlayer().getId())) continue;
             String statLabel = PlayerService.getStatLabel(d.getStatKey());
             String teamAbbr = playerToTeam.get(d.getPlayer().getId());
             int hit10 = d.getHitRateLast10() != null ? d.getHitRateLast10() : -1;
