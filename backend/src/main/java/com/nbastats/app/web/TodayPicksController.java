@@ -25,7 +25,8 @@ public class TodayPicksController {
     public List<TodayPickDto> getTodayPicks(
         @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        LocalDate useDate = date != null ? date : LocalDate.now();
+        LocalDate useDate = date != null ? date : dailyPropLineService.getLatestLineDate().orElse(null);
+        if (useDate == null) return List.of();
         return dailyPropLineService.getTodayPicks(useDate);
     }
 

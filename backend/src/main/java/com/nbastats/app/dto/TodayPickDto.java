@@ -10,5 +10,6 @@ public record TodayPickDto(
     double line,
     String suggestion,  // Over, Under
     String confidence,
-    String reason
+    String reason,
+    String teamAbbr     // optional, for diversity; may be null
 ) {}

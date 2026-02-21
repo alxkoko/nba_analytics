@@ -5,6 +5,7 @@ import com.nbastats.app.dto.TodayPickDto;
 import com.nbastats.app.entity.DailyPropLine;
 import com.nbastats.app.entity.Player;
 import com.nbastats.app.repository.DailyPropLineRepository;
+import com.nbastats.app.repository.PlayerGameLogRepository;
 import com.nbastats.app.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,20 +13,26 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class DailyPropLineService {
 
     private final PlayerRepository playerRepository;
     private final DailyPropLineRepository dailyPropLineRepository;
+    private final PlayerGameLogRepository playerGameLogRepository;
     private final PlayerService playerService;
 
     public DailyPropLineService(PlayerRepository playerRepository,
                                 DailyPropLineRepository dailyPropLineRepository,
+                                PlayerGameLogRepository playerGameLogRepository,
                                 PlayerService playerService) {
         this.playerRepository = playerRepository;
         this.dailyPropLineRepository = dailyPropLineRepository;
+        this.playerGameLogRepository = playerGameLogRepository;
         this.playerService = playerService;
     }
 
@@ -70,11 +77,38 @@ public class DailyPropLineService {
         };
     }
 
+    /** Latest line_date in the DB (most recent day with any picks). */
+    public Optional<LocalDate> getLatestLineDate() {
+        return dailyPropLineRepository.findMaxLineDate();
+    }
+
+    /** NBA season for a date: Oct–June = current season; July–Sep = previous. */
+    private static String seasonForDate(LocalDate date) {
+        int year = date.getYear();
+        int month = date.getMonthValue();
+        int startYear = month >= 10 ? year : year - 1;
+        int endYY = (startYear + 1) % 100;
+        return startYear + "-" + (endYY < 10 ? "0" : "") + endYY;
+    }
+
     public List<TodayPickDto> getTodayPicks(LocalDate date) {
         List<DailyPropLine> list = dailyPropLineRepository.findByLineDateWithPlayer(date);
         List<TodayPickDto> out = new ArrayList<>();
+        if (list.isEmpty()) return out;
+
+        List<Long> playerIds = list.stream().map(d -> d.getPlayer().getId()).distinct().toList();
+        String season = seasonForDate(date);
+        List<Object[]> teamRows = playerIds.isEmpty() ? List.of() : playerGameLogRepository.findLatestTeamAbbrByPlayerIdsAndSeason(playerIds, season);
+        Map<Long, String> playerToTeam = new LinkedHashMap<>();
+        for (Object[] row : teamRows) {
+            Long pid = ((Number) row[0]).longValue();
+            String abbr = row[1] != null ? row[1].toString() : null;
+            playerToTeam.putIfAbsent(pid, abbr);
+        }
+
         for (DailyPropLine d : list) {
             String statLabel = PlayerService.getStatLabel(d.getStatKey());
+            String teamAbbr = playerToTeam.get(d.getPlayer().getId());
             out.add(new TodayPickDto(
                 d.getId(),
                 d.getPlayer().getFullName(),
@@ -84,7 +118,8 @@ public class DailyPropLineService {
                 d.getLineValue(),
                 d.getSuggestion(),
                 d.getConfidence(),
-                d.getReason()
+                d.getReason(),
+                teamAbbr
             ));
         }
         out.sort(Comparator.comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed());
