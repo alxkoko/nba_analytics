@@ -81,20 +81,6 @@ public class DailyPropLineService {
         };
     }
 
-    /** Strength for sorting: Over = hit_rate (higher better); Under = 10 - hit_rate (higher = more unders = better). -1 stays last. */
-    private static int strengthForSort(TodayPickDto t) {
-        int h = t.hitRateLast10();
-        if (h < 0) return -1;
-        return "Under".equals(t.suggestion()) ? 10 - h : h;
-    }
-
-    /** Over-strength for sorting: Over = over_last_5 (higher better); Under = 5 - over_last_5 (higher = more unders = better). -1 stays last. */
-    private static int overStrengthForSort(TodayPickDto t) {
-        int o = t.overLast5();
-        if (o < 0) return -1;
-        return "Under".equals(t.suggestion()) ? 5 - o : o;
-    }
-
     /** Latest line_date in the DB (most recent day with any picks). */
     public Optional<LocalDate> getLatestLineDate() {
         return dailyPropLineRepository.findMaxLineDate();
@@ -145,12 +131,13 @@ public class DailyPropLineService {
                 over5
             ));
         }
-        // Sort by confidence (High first), then by suggestion-aware strength:
-        // Over: higher hit rate = stronger (8/10 before 5/10). Under: lower hit rate = stronger (1/10 before 8/10).
+        // Sort by confidence (High first), then hit rate strength (higher = better), then id for stable order.
+        // Same logic as: ORDER BY confidence, hit_rate_last_10 DESC, over_last_5 DESC, id
         out.sort(Comparator
             .comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed()
-            .thenComparingInt((TodayPickDto t) -> strengthForSort(t)).reversed()
-            .thenComparingInt((TodayPickDto t) -> overStrengthForSort(t)).reversed());
+            .thenComparingInt(TodayPickDto::hitRateLast10).reversed()
+            .thenComparingInt(TodayPickDto::overLast5).reversed()
+            .thenComparingLong(TodayPickDto::id));
 
         if (limit != null) {
             int cap = limit <= 0 ? out.size() : Math.min(limit, out.size());
