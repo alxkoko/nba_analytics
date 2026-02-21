@@ -11,5 +11,7 @@ public record TodayPickDto(
     String suggestion,  // Over, Under
     String confidence,
     String reason,
-    String teamAbbr     // optional, for diversity; may be null
+    String teamAbbr,    // optional, for diversity; may be null
+    int hitRateLast10,  // 0–10; -1 if not stored (old data)
+    int overLast5       // 0–5; -1 if not stored (old data)
 ) {}

@@ -17,6 +17,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DailyPropLineService {
@@ -58,6 +60,8 @@ public class DailyPropLineService {
             entity.setSuggestion(dto.suggestion());
             entity.setConfidence(dto.confidence());
             entity.setReason(String.format("%d/5 last 5, %d/10 last 10, trend %s. %s", dto.overLast5(), dto.hitRateLast10(), dto.trend(), dto.varianceNote()));
+            entity.setHitRateLast10(dto.hitRateLast10());
+            entity.setOverLast5(dto.overLast5());
             dailyPropLineRepository.save(entity);
             saved++;
         }
@@ -110,6 +114,8 @@ public class DailyPropLineService {
         for (DailyPropLine d : list) {
             String statLabel = PlayerService.getStatLabel(d.getStatKey());
             String teamAbbr = playerToTeam.get(d.getPlayer().getId());
+            int hit10 = d.getHitRateLast10() != null ? d.getHitRateLast10() : -1;
+            int over5 = d.getOverLast5() != null ? d.getOverLast5() : -1;
             out.add(new TodayPickDto(
                 d.getId(),
                 d.getPlayer().getFullName(),
@@ -120,12 +126,41 @@ public class DailyPropLineService {
                 d.getSuggestion(),
                 d.getConfidence(),
                 d.getReason(),
-                teamAbbr
+                teamAbbr,
+                hit10,
+                over5
             ));
         }
-        out.sort(Comparator.comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed());
-        int cap = limit == null ? TOP_PICKS_LIMIT : (limit <= 0 ? out.size() : Math.min(limit, out.size()));
-        return out.size() <= cap ? out : out.subList(0, cap);
+        // Sort by confidence (High first), then by hit rate strength: 8/10 before 5/10, 4/5 before 3/5
+        out.sort(Comparator
+            .comparingInt((TodayPickDto t) -> confidenceOrder(t.confidence())).reversed()
+            .thenComparingInt(TodayPickDto::hitRateLast10).reversed()
+            .thenComparingInt(TodayPickDto::overLast5).reversed());
+
+        if (limit != null) {
+            int cap = limit <= 0 ? out.size() : Math.min(limit, out.size());
+            return out.size() <= cap ? out : out.subList(0, cap);
+        }
+
+        // Homepage: first 3 (by confidence/id), then +1 fg3m (if available), +1 reb_ast (if available)
+        List<TodayPickDto> result = new ArrayList<>(out.size() <= TOP_PICKS_LIMIT ? out : out.subList(0, TOP_PICKS_LIMIT));
+        Set<Long> resultIds = result.stream().map(TodayPickDto::id).collect(Collectors.toSet());
+        for (TodayPickDto t : out) {
+            if (resultIds.contains(t.id())) continue;
+            if ("fg3m".equals(t.statKey())) {
+                result.add(t);
+                resultIds.add(t.id());
+                break;
+            }
+        }
+        for (TodayPickDto t : out) {
+            if (resultIds.contains(t.id())) continue;
+            if ("reb_ast".equals(t.statKey())) {
+                result.add(t);
+                break;
+            }
+        }
+        return result;
     }
 
     /** Request body for one line when adding daily lines. */

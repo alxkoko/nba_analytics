@@ -85,10 +85,16 @@ CREATE TABLE IF NOT EXISTS daily_prop_lines (
     suggestion      VARCHAR(8) NOT NULL,    -- Over, Under
     confidence      VARCHAR(16) NOT NULL,   -- High, Medium, Low
     reason          VARCHAR(512),          -- e.g. "4/5 last 5, trend Up, consistent"
+    hit_rate_last_10 INTEGER,              -- 0-10; for sorting "most probable" within confidence
+    over_last_5     INTEGER,              -- 0-5; for sorting within confidence
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_dpl_line_date ON daily_prop_lines (line_date);
+
+-- Add hit-rate columns when upgrading from an older schema (idempotent)
+ALTER TABLE daily_prop_lines ADD COLUMN IF NOT EXISTS hit_rate_last_10 INTEGER;
+ALTER TABLE daily_prop_lines ADD COLUMN IF NOT EXISTS over_last_5 INTEGER;
 
 -- Trigger to keep updated_at current (optional)
 CREATE OR REPLACE FUNCTION set_updated_at()

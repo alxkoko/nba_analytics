@@ -35,6 +35,14 @@ public class DailyPropLine {
     @Column(name = "reason", length = 512)
     private String reason;
 
+    /** Hit rate last 10 games (0–10). Null for lines saved before this was added. */
+    @Column(name = "hit_rate_last_10")
+    private Integer hitRateLast10;
+
+    /** Over line in last 5 games (0–5). Null for lines saved before this was added. */
+    @Column(name = "over_last_5")
+    private Integer overLast5;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -66,6 +74,12 @@ public class DailyPropLine {
 
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+
+    public Integer getHitRateLast10() { return hitRateLast10; }
+    public void setHitRateLast10(Integer hitRateLast10) { this.hitRateLast10 = hitRateLast10; }
+
+    public Integer getOverLast5() { return overLast5; }
+    public void setOverLast5(Integer overLast5) { this.overLast5 = overLast5; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
