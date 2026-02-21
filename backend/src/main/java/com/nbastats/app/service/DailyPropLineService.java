@@ -96,6 +96,12 @@ public class DailyPropLineService {
         return "Under".equalsIgnoreCase(t.suggestion()) ? (5 - o) : o;
     }
 
+    /** Strip legacy "trend Up." / "trend Down." from reason (old DB rows). */
+    private static String sanitizeReason(String reason) {
+        if (reason == null) return null;
+        return reason.replace(", trend Up. ", ". ").replace(", trend Down. ", ". ");
+    }
+
     /** Latest line_date in the DB (most recent day with any picks). */
     public Optional<LocalDate> getLatestLineDate() {
         return dailyPropLineRepository.findMaxLineDate();
@@ -142,7 +148,7 @@ public class DailyPropLineService {
                 d.getLineValue(),
                 d.getSuggestion(),
                 d.getConfidence(),
-                d.getReason(),
+                sanitizeReason(d.getReason()),
                 teamAbbr,
                 hit10,
                 over5
