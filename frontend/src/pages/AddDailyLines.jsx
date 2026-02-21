@@ -60,13 +60,13 @@ export default function AddDailyLines() {
           Date: <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ padding: '0.35rem', borderRadius: 4, border: '1px solid #ccc' }} />
         </label>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Lines (paste ~30 from your book):
+          Lines (paste from your book — 30, 60, or more; no limit):
         </label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={"Kon Knueppel, fg3m, 3\nDamian Lillard, pts, 25.5\n..."}
-          rows={14}
+          rows={18}
           style={{ width: '100%', maxWidth: 500, padding: '0.5rem', borderRadius: 6, border: '1px solid #ccc', fontFamily: 'inherit', fontSize: '0.9rem' }}
         />
         <div style={{ marginTop: '0.75rem' }}>

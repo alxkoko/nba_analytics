@@ -7,6 +7,15 @@ const MIN_QUERY_LENGTH = 2
 
 const DOC_TITLE = 'NBA Player Analytics'
 
+/** User's local date as YYYY-MM-DD (so "today's picks" match their calendar day, not server UTC). */
+function getLocalDateString() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Same CDN as PlayerDetail; images load from NBA, not your hosting
 const HEADSHOT_URL = (nbaId) => `https://cdn.nba.com/headshots/nba/latest/260x190/${nbaId}.png`
 
@@ -43,7 +52,8 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    api.getTodayPicks().then(setTodayPicks).catch(() => setTodayPicks([]))
+    const date = getLocalDateString()
+    api.getTodayPicks(date).then(setTodayPicks).catch(() => setTodayPicks([]))
   }, [])
 
   // Debounced search-as-you-type for suggestions
