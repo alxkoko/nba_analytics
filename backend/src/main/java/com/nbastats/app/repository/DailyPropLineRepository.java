@@ -11,7 +11,7 @@ import java.util.Optional;
 
 public interface DailyPropLineRepository extends JpaRepository<DailyPropLine, Long> {
 
-    @Query("SELECT d FROM DailyPropLine d JOIN FETCH d.player WHERE d.lineDate = :date ORDER BY CASE d.confidence WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END, d.id")
+    @Query("SELECT d FROM DailyPropLine d JOIN FETCH d.player WHERE d.lineDate = :date ORDER BY CASE d.confidence WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Hot take' THEN 3 ELSE 4 END, d.id")
     List<DailyPropLine> findByLineDateWithPlayer(LocalDate date);
 
     @Query("SELECT MAX(d.lineDate) FROM DailyPropLine d")

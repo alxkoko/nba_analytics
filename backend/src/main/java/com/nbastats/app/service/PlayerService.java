@@ -127,12 +127,21 @@ public class PlayerService {
     public PropPickSuggestionDto getSinglePropSuggestion(Long playerId, String season, String statKey, double lineValue) {
         String safeStat = ALLOWED_STATS.contains(statKey) ? statKey : "pts";
         String label = STAT_LABELS.getOrDefault(safeStat, safeStat);
-        List<PlayerGameLog> logs = gameLogRepository.findByPlayer_IdAndSeasonOrderByGameDateDesc(playerId, season);
-        if (logs.size() < 10) {
+        List<PlayerGameLog> allLogs = gameLogRepository.findByPlayer_IdAndSeasonOrderByGameDateDesc(playerId, season);
+        if (allLogs.size() < 10) {
             return null;
         }
-        logs = logs.stream().limit(10).toList();
-        return buildPropSuggestion(logs, safeStat, label, lineValue);
+        List<PlayerGameLog> logs = allLogs.stream().limit(10).toList();
+
+        Double seasonAvg3pm = null;
+        Double season3pPct = null;
+        if ("fg3m".equals(safeStat) && allLogs.size() >= 10) {
+            int seasonFg3m = allLogs.stream().mapToInt(g -> g.getFg3m() != null ? g.getFg3m() : 0).sum();
+            int seasonFg3a = allLogs.stream().mapToInt(g -> g.getFg3a() != null ? g.getFg3a() : 0).sum();
+            seasonAvg3pm = (double) seasonFg3m / allLogs.size();
+            season3pPct = seasonFg3a > 0 ? (double) seasonFg3m / seasonFg3a : null;
+        }
+        return buildPropSuggestion(logs, safeStat, label, lineValue, seasonAvg3pm, season3pPct);
     }
 
     public static String getStatLabel(String statKey) {
@@ -144,6 +153,11 @@ public class PlayerService {
     }
 
     private PropPickSuggestionDto buildPropSuggestion(List<PlayerGameLog> logs, String statKey, String propLabel, double line) {
+        return buildPropSuggestion(logs, statKey, propLabel, line, null, null);
+    }
+
+    private PropPickSuggestionDto buildPropSuggestion(List<PlayerGameLog> logs, String statKey, String propLabel, double line,
+                                                      Double seasonAvg3pm, Double season3pPct) {
         List<Double> values = logs.stream()
             .map(g -> getStatValue(g, statKey).doubleValue())
             .toList();
@@ -158,7 +172,20 @@ public class PlayerService {
         double maxLast5 = values.stream().limit(5).mapToDouble(Double::doubleValue).max().orElse(0);
         boolean oneBigGame = n5 >= 3 && maxLast5 > last5Avg + 2 * stdDev(values.stream().limit(5).toList());
         String varianceNote = oneBigGame ? "One big game in last 5 — tread carefully" : (highVariance ? "High variance" : "Consistent");
-        double projected = 0.6 * last5Avg + 0.4 * last10Avg;
+
+        double recentProjection = 0.6 * last5Avg + 0.4 * last10Avg;
+        double projected = recentProjection;
+        boolean usedSeasonAnchor = false;
+        if ("fg3m".equals(statKey) && seasonAvg3pm != null && seasonAvg3pm > 0) {
+            // Anchor to season average so slumps (e.g. Curry 1/7 last 5) don't overweight recent form
+            if (recentProjection < seasonAvg3pm - 1.0) {
+                projected = 0.5 * recentProjection + 0.5 * seasonAvg3pm;
+                usedSeasonAnchor = true;
+            } else {
+                projected = 0.65 * recentProjection + 0.35 * seasonAvg3pm;
+            }
+        }
+
         String suggestion;
         String confidence;
         if (projected >= line + 1.5 && (int) over5 >= 3 && !oneBigGame) {
@@ -175,7 +202,12 @@ public class PlayerService {
             confidence = oneBigGame ? "Low" : (highVariance ? "Medium" : "High");
         } else {
             suggestion = projected >= line ? "Over" : "Under";
-            confidence = "Low";
+            if ("Over".equals(suggestion) && usedSeasonAnchor) {
+                confidence = "Hot take";
+                varianceNote = "Hot take: cold recently, season avg suggests Over";
+            } else {
+                confidence = "Low";
+            }
         }
         return new PropPickSuggestionDto(propLabel, statKey, line, suggestion, confidence,
             Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
