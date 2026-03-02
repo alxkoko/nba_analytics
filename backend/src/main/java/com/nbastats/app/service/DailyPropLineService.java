@@ -69,7 +69,7 @@ public class DailyPropLineService {
         return saved;
     }
 
-    private static final int TOP_PICKS_LIMIT = 3;
+    private static final int TOP_PICKS_LIMIT = 10;
 
     /** Confidence order for "most probable": High, Medium, Hot take, then Low. */
     private static int confidenceOrder(String c) {
@@ -111,7 +111,7 @@ public class DailyPropLineService {
         return startYear + "-" + (endYY < 10 ? "0" : "") + endYY;
     }
 
-    /** Get picks for a date, sorted by confidence (High first). limit null = 3 (homepage), 0 or negative = all. */
+    /** Get picks for a date, sorted by confidence (High first). limit null = 10 (homepage), 0 or negative = all. */
     public List<TodayPickDto> getTodayPicks(LocalDate date, Integer limit) {
         List<DailyPropLine> list = dailyPropLineRepository.findByLineDateWithPlayer(date);
         List<TodayPickDto> out = new ArrayList<>();
@@ -161,25 +161,9 @@ public class DailyPropLineService {
             return out.size() <= cap ? out : out.subList(0, cap);
         }
 
-        // Homepage: first 3 (by confidence/id), then +1 fg3m (if available), +1 reb_ast (if available)
-        List<TodayPickDto> result = new ArrayList<>(out.size() <= TOP_PICKS_LIMIT ? out : out.subList(0, TOP_PICKS_LIMIT));
-        Set<Long> resultIds = result.stream().map(TodayPickDto::id).collect(Collectors.toSet());
-        for (TodayPickDto t : out) {
-            if (resultIds.contains(t.id())) continue;
-            if ("fg3m".equals(t.statKey())) {
-                result.add(t);
-                resultIds.add(t.id());
-                break;
-            }
-        }
-        for (TodayPickDto t : out) {
-            if (resultIds.contains(t.id())) continue;
-            if ("reb_ast".equals(t.statKey())) {
-                result.add(t);
-                break;
-            }
-        }
-        return result;
+        // Homepage: top picks only, no forced stat-category insertion.
+        int cap = Math.min(TOP_PICKS_LIMIT, out.size());
+        return out.size() <= cap ? out : out.subList(0, cap);
     }
 
     /** Request body for one line when adding daily lines. */
