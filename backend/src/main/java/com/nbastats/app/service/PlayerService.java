@@ -133,15 +133,20 @@ public class PlayerService {
         }
         List<PlayerGameLog> logs = allLogs.stream().limit(10).toList();
 
+        int seasonHits = (int) allLogs.stream()
+            .filter(g -> getStatValue(g, safeStat).doubleValue() >= lineValue)
+            .count();
+        int seasonTotal = allLogs.size();
+
         Double seasonAvg3pm = null;
         Double season3pPct = null;
-        if ("fg3m".equals(safeStat) && allLogs.size() >= 10) {
+        if ("fg3m".equals(safeStat)) {
             int seasonFg3m = allLogs.stream().mapToInt(g -> g.getFg3m() != null ? g.getFg3m() : 0).sum();
             int seasonFg3a = allLogs.stream().mapToInt(g -> g.getFg3a() != null ? g.getFg3a() : 0).sum();
             seasonAvg3pm = (double) seasonFg3m / allLogs.size();
             season3pPct = seasonFg3a > 0 ? (double) seasonFg3m / seasonFg3a : null;
         }
-        return buildPropSuggestion(logs, safeStat, label, lineValue, seasonAvg3pm, season3pPct);
+        return buildPropSuggestion(logs, safeStat, label, lineValue, seasonAvg3pm, season3pPct, seasonHits, seasonTotal);
     }
 
     public static String getStatLabel(String statKey) {
@@ -153,11 +158,12 @@ public class PlayerService {
     }
 
     private PropPickSuggestionDto buildPropSuggestion(List<PlayerGameLog> logs, String statKey, String propLabel, double line) {
-        return buildPropSuggestion(logs, statKey, propLabel, line, null, null);
+        return buildPropSuggestion(logs, statKey, propLabel, line, null, null, 0, 0);
     }
 
     private PropPickSuggestionDto buildPropSuggestion(List<PlayerGameLog> logs, String statKey, String propLabel, double line,
-                                                      Double seasonAvg3pm, Double season3pPct) {
+                                                      Double seasonAvg3pm, Double season3pPct,
+                                                      int seasonHits, int seasonTotal) {
         List<Double> values = logs.stream()
             .map(g -> getStatValue(g, statKey).doubleValue())
             .toList();
@@ -165,53 +171,88 @@ public class PlayerService {
         int n5 = Math.min(5, n);
         double last10Avg = values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
         double last5Avg = values.stream().limit(5).mapToDouble(Double::doubleValue).average().orElse(0);
-        long hit10 = values.stream().filter(v -> v >= line).count();
-        long over5 = values.stream().limit(5).filter(v -> v >= line).count();
+        int hit10 = (int) values.stream().filter(v -> v >= line).count();
+        int over5 = (int) values.stream().limit(5).filter(v -> v >= line).count();
         double stdDev = stdDev(values);
         boolean highVariance = n > 1 && stdDev > 0.3 * last10Avg;
         double maxLast5 = values.stream().limit(5).mapToDouble(Double::doubleValue).max().orElse(0);
         boolean oneBigGame = n5 >= 3 && maxLast5 > last5Avg + 2 * stdDev(values.stream().limit(5).toList());
-        String varianceNote = oneBigGame ? "One big game in last 5 — tread carefully" : (highVariance ? "High variance" : "Consistent");
+        String varianceNote = oneBigGame ? "One big game in last 5 — tread carefully"
+            : (highVariance ? "High variance" : "Consistent");
 
-        double recentProjection = 0.6 * last5Avg + 0.4 * last10Avg;
-        double projected = recentProjection;
-        boolean usedSeasonAnchor = false;
-        if ("fg3m".equals(statKey) && seasonAvg3pm != null && seasonAvg3pm > 0) {
-            // Anchor to season average so slumps (e.g. Curry 1/7 last 5) don't overweight recent form
-            if (recentProjection < seasonAvg3pm - 1.0) {
-                projected = 0.5 * recentProjection + 0.5 * seasonAvg3pm;
-                usedSeasonAnchor = true;
-            } else {
-                projected = 0.65 * recentProjection + 0.35 * seasonAvg3pm;
-            }
-        }
+        boolean hasSeasonData = seasonTotal >= 10;
+        double seasonHitRate = hasSeasonData ? (double) seasonHits / seasonTotal : 0.0;
 
+        // Direction: determined by last-10 hit rate (primary signal).
+        // Projection only breaks a 5/5 tie.
+        int under10 = 10 - hit10;
+        int under5 = 5 - over5;
         String suggestion;
-        String confidence;
-        if (projected >= line + 1.5 && (int) over5 >= 3 && !oneBigGame) {
+        if (hit10 > under10) {
             suggestion = "Over";
-            confidence = highVariance ? "Medium" : "High";
-        } else if (projected >= line && (int) hit10 >= 5) {
-            suggestion = "Over";
-            confidence = oneBigGame ? "Low" : (highVariance ? "Medium" : "High");
-        } else if (projected <= line - 1.5 && (int) over5 <= 2) {
+        } else if (under10 > hit10) {
             suggestion = "Under";
-            confidence = highVariance ? "Medium" : "High";
-        } else if (projected <= line && (int) hit10 <= 5) {
-            suggestion = "Under";
-            confidence = oneBigGame ? "Low" : (highVariance ? "Medium" : "High");
         } else {
-            suggestion = projected >= line ? "Over" : "Under";
-            if ("Over".equals(suggestion) && usedSeasonAnchor) {
-                confidence = "Hot take";
+            // 5/5 tie — fall back to weighted projection
+            double recentProjection = 0.6 * last5Avg + 0.4 * last10Avg;
+            // fg3m hot take: season anchor only fires when the player actually hits the line
+            // with reasonable frequency (≥35%) — avoids false Over for rare 3PT shooters
+            if ("fg3m".equals(statKey) && seasonAvg3pm != null && seasonAvg3pm > 0
+                    && (!hasSeasonData || seasonHitRate >= 0.35)
+                    && recentProjection < seasonAvg3pm - 1.0) {
                 varianceNote = "Hot take: cold recently, season avg suggests Over";
-            } else {
-                confidence = "Low";
+                return new PropPickSuggestionDto(propLabel, statKey, line, "Over", "Hot take",
+                    Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
+                    hit10, over5, varianceNote);
+            }
+            suggestion = recentProjection >= line ? "Over" : "Under";
+            return new PropPickSuggestionDto(propLabel, statKey, line, suggestion, "Low",
+                Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
+                hit10, over5, varianceNote);
+        }
+
+        // Hits in favour of the chosen direction
+        int hitsFor10 = "Over".equals(suggestion) ? hit10 : under10;
+        int hitsFor5 = "Over".equals(suggestion) ? over5 : under5;
+        double seasonRateFor = "Over".equals(suggestion) ? seasonHitRate
+            : (hasSeasonData ? 1.0 - seasonHitRate : 0.0);
+
+        // Confidence: hit rate is the primary driver.
+        // Variance can only downgrade in the ambiguous 6-7/10 range.
+        // A hit rate of 8+/10 overrides variance (the player is simply consistent against this line).
+        String confidence;
+        if (hitsFor10 >= 9) {
+            // 9 or 10 out of 10 — dominant consistency; oneBigGame can't inflate Under counts
+            confidence = (oneBigGame && "Over".equals(suggestion)) ? "Medium" : "High";
+        } else if (hitsFor10 == 8) {
+            // Strong but not perfect: season rate can rescue from a variance downgrade
+            boolean seasonOverrides = hasSeasonData && seasonRateFor >= 0.75;
+            confidence = (!highVariance || seasonOverrides) ? "High" : "Medium";
+        } else if (hitsFor10 == 7) {
+            // Decent: need recent form (≥4/5) AND low variance for High
+            confidence = (hitsFor5 >= 4 && !highVariance) ? "High" : "Medium";
+        } else {
+            // 6/10: ambiguous enough that variance is a meaningful signal
+            confidence = "Medium";
+        }
+
+        // fg3m cold-streak hot take: player's last-10 says Under but season shows they
+        // normally clear this line — only fires when season hit rate is meaningful (≥35%)
+        if ("fg3m".equals(statKey) && "Under".equals(suggestion)
+                && seasonAvg3pm != null && seasonAvg3pm > 0
+                && hasSeasonData && seasonHitRate >= 0.35) {
+            double recentProjection = 0.6 * last5Avg + 0.4 * last10Avg;
+            if (recentProjection < seasonAvg3pm - 1.0) {
+                varianceNote = "Hot take: cold recently, season avg suggests Over";
+                return new PropPickSuggestionDto(propLabel, statKey, line, "Over", "Hot take",
+                    Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
+                    hit10, over5, varianceNote);
             }
         }
+
         return new PropPickSuggestionDto(propLabel, statKey, line, suggestion, confidence,
             Math.round(last10Avg * 10) / 10.0, Math.round(last5Avg * 10) / 10.0, "",
-            (int) hit10, (int) over5, varianceNote);
+            hit10, over5, varianceNote);
     }
 
     private double stdDev(List<Double> values) {

@@ -69,7 +69,7 @@ public class DailyPropLineService {
         return saved;
     }
 
-    private static final int TOP_PICKS_LIMIT = 10;
+    private static final int TOP_PICKS_LIMIT = 8;
 
     /** Confidence order for "most probable": High, Medium, Hot take, then Low. */
     private static int confidenceOrder(String c) {
