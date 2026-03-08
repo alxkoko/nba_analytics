@@ -30,6 +30,18 @@ mvn clean package
 java -jar target/nba-stats-api-0.0.1-SNAPSHOT.jar
 ```
 
+## Deploying on Railway (500MB free tier)
+
+The app can hit the 500MB container limit because the JVM uses a large default heap. To avoid out-of-memory crashes:
+
+1. **Set the service Root Directory** to `backend` in Railway so the `Procfile` is used. The Procfile starts the JAR with `-Xmx256m -Xms128m -XX:MaxMetaspaceSize=64m` to keep memory under the limit.
+
+2. **Optional:** In Railway → your service → Variables, set `JAVA_OPTS` if you want different limits (e.g. `-Xmx300m -Xms128m`). If you use a custom start command, pass these flags to `java`.
+
+3. **application.properties** already sets a small HikariCP pool (`maximum-pool-size=3`) and Tomcat thread cap (`server.tomcat.threads.max=25`) to reduce memory use.
+
+4. Ensure `server.port=${PORT:8080}` and `server.address=0.0.0.0` (included in the example) so the app binds to Railway’s `PORT` and is reachable.
+
 API base: **http://localhost:8080**
 
 ## Endpoints

@@ -43,8 +43,18 @@ public class TodayPicksController {
             return ResponseEntity.badRequest().body(Map.of("error", "date must be YYYY-MM-DD"));
         }
         String season = request.getSeason() != null ? request.getSeason() : "2025-26";
-        int saved = dailyPropLineService.addDailyLines(date, season, request.getLines());
-        return ResponseEntity.ok(Map.of("saved", saved, "date", date.toString()));
+        List<DailyPropLineService.LineInput> lines = request.getLines();
+
+        // Process in batches to avoid OOM: one big transaction would keep 400 × ~70 game logs in Hibernate's persistence context.
+        int batchSize = 30;
+        int totalSaved = 0;
+        for (int i = 0; i < lines.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, lines.size());
+            List<DailyPropLineService.LineInput> chunk = lines.subList(i, end);
+            totalSaved += dailyPropLineService.addDailyLines(date, season, chunk);
+        }
+
+        return ResponseEntity.ok(Map.of("saved", totalSaved, "date", date.toString()));
     }
 
     public static class AddDailyLinesRequest {
