@@ -155,7 +155,15 @@ public class DailyPropLineService {
             .thenComparing(Comparator.comparingInt((TodayPickDto t) -> normalizedHitRate(t)).reversed())
             .thenComparing(Comparator.comparingInt((TodayPickDto t) -> normalizedOver5(t)).reversed())
             .thenComparingLong(TodayPickDto::id));
-            
+
+        // One pick per player: keep only the most probable (first after sort).
+        Set<Long> seenPlayerIds = new HashSet<>();
+        List<TodayPickDto> onePerPlayer = new ArrayList<>();
+        for (TodayPickDto t : out) {
+            if (seenPlayerIds.add(t.playerId())) onePerPlayer.add(t);
+        }
+        out = onePerPlayer;
+
         if (limit != null) {
             int cap = limit <= 0 ? out.size() : Math.min(limit, out.size());
             return out.size() <= cap ? out : out.subList(0, cap);
