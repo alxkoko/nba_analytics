@@ -44,7 +44,7 @@ export default function ViewTodayPicks() {
                 }}
               >
                 <span style={{ width: 24, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: pick.suggestion === 'Over' ? '#0a0' : '#c41e3a', color: '#fff', fontSize: 14 }}>
-                  {pick.suggestion === 'Over' ? '✓' : '✕'}
+                  ✓
                 </span>
                 <span style={{ fontWeight: 600, minWidth: '2rem' }}>{idx + 1}.</span>
                 <span style={{ fontWeight: 600 }}>

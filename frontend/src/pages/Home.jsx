@@ -59,7 +59,7 @@ export default function Home() {
     const t = setTimeout(async () => {
       try {
         const data = await api.searchPlayers(query.trim())
-        const list = Array.isArray(data) ? data.slice(0, 8) : []
+        const list = Array.isArray(data) ? data.slice(0, 3) : []
         setSuggestions(list)
         setShowSuggestions(list.length > 0)
       } catch {
